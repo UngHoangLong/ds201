@@ -1,0 +1,53 @@
+# baseline_model.py
+
+from transformers import SpeechEncoderDecoderModel, Wav2Vec2Config, BertConfig, AutoTokenizer
+
+# Tên mô hình Wav2Vec2 (Encoder)
+encoder_id = "nguyenvulebinh/wav2vec2-base-vi-vlsp2020"
+# Kích thước ẩn của encoder BASE là 768
+ENCODER_HIDDEN_SIZE = 768 
+
+def create_baseline_model(tokenizer_path):
+    # Tải tokenizer đã mở rộng
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path) # chú ý là sẽ lấy tokenizer đã mở rộng
+    
+    # --- Cấu hình Decoder 6 Lớp (Khởi tạo ngẫu nhiên) ---
+    # 1. Tải cấu hình của Encoder để đảm bảo các tham số khớp
+    encoder_config = Wav2Vec2Config.from_pretrained(encoder_id)
+    
+    # 2. Tạo một cấu hình Decoder (dựa trên BERT hoặc kiến trúc Transformer tiêu chuẩn)
+    decoder_config = BertConfig(
+        vocab_size=len(tokenizer),              # Kích thước từ vựng MỚI (đã mở rộng)
+        hidden_size=ENCODER_HIDDEN_SIZE,        # PHẢI KHỚP với Encoder
+        num_hidden_layers=6,                    # Số lớp bạn yêu cầu
+        num_attention_heads=12,                 # (Tiêu chuẩn cho base size)
+        is_decoder=True,                        # BẮT BUỘC: Xác nhận đây là Decoder
+        add_cross_attention=True,               # BẮT BUỘC: Cho phép Cross-Attention với Encoder
+        # Thiết lập các ID token đặc biệt cho quá trình sinh (generate)
+        decoder_start_token_id=tokenizer.cls_token_id, 
+        pad_token_id=tokenizer.pad_token_id
+    )
+
+    # 3. Khởi tạo mô hình Encoder-Decoder
+    model = SpeechEncoderDecoderModel.from_encoder_decoder_pretrained(
+        encoder_pretrained_model_name_or_path=encoder_id,
+        decoder_config=decoder_config
+    )
+    
+    # 4. Cập nhật kích thước Embedding của Decoder (BẮT BUỘC)
+    # Vì chúng ta đã mở rộng từ vựng, phải thay đổi lớp embedding
+    model.decoder.resize_token_embeddings(len(tokenizer))
+    
+    # 5. Đóng băng Encoder (chuẩn bị cho Adapter)
+    # Toàn bộ Encoder (và một phần Decoder) sẽ bị đóng băng khi huấn luyện Adapter.
+    # Ngay tại bước này, bạn có thể đóng băng Encoder ngay để thử nghiệm
+    # for param in model.encoder.parameters():
+    #     param.requires_grad = False
+    
+    print(f"Tổng số tham số: {model.num_parameters():,}")
+    print(f"Số tham số huấn luyện được: {sum(p.numel() for p in model.parameters() if p.requires_grad):,}")
+    
+    return model
+
+# # Ví dụ gọi hàm:
+# model = create_baseline_model("./vi_tokenizer_extended")
