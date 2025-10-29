@@ -1,7 +1,6 @@
 # baseline_model.py
 
-from transformers import SpeechEncoderDecoderModel, Wav2Vec2Config, BertConfig, AutoTokenizer
-
+from transformers import SpeechEncoderDecoderModel, Wav2Vec2Config, BertConfig, AutoTokenizer, AutoModel, AutoConfig
 # Tên mô hình Wav2Vec2 (Encoder)
 encoder_id = "nguyenvulebinh/wav2vec2-base-vi-vlsp2020"
 # Kích thước ẩn của encoder BASE là 768
@@ -29,9 +28,21 @@ def create_baseline_model(tokenizer_path):
     )
 
     # 3. Khởi tạo mô hình Encoder-Decoder
-    model = SpeechEncoderDecoderModel.from_encoder_decoder_pretrained(
-        encoder_pretrained_model_name_or_path=encoder_id,
-        decoder_config=decoder_config
+    
+    # A. Tải Encoder (Wav2Vec2)
+    encoder = AutoModel.from_pretrained(
+        encoder_id,
+        config=encoder_config, # Dùng config đã tải để đảm bảo khớp
+        local_files_only=True # <-- BẮT BUỘC DÙNG FILE CACHE
+    )
+    
+    # B. Khởi tạo Decoder (Bert) từ cấu hình (không cần tải checkpoint)
+    decoder = AutoModel.from_config(decoder_config)
+    
+    # C. Kết hợp Encoder và Decoder
+    model = SpeechEncoderDecoderModel(
+        encoder=encoder,
+        decoder=decoder
     )
     
     # 4. Cập nhật kích thước Embedding của Decoder (BẮT BUỘC)
