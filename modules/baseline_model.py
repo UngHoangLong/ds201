@@ -1,6 +1,7 @@
 # baseline_model.py
 
-from transformers import SpeechEncoderDecoderModel, Wav2Vec2Config, BertConfig, AutoTokenizer, AutoModel, AutoConfig
+from transformers import SpeechEncoderDecoderModel, Wav2Vec2Config, BertConfig, AutoTokenizer, AutoModel, AutoConfig, Wav2Vec2Model
+import torch # Cần cho torch.load
 # Tên mô hình Wav2Vec2 (Encoder)
 encoder_id = "nguyenvulebinh/wav2vec2-base-vi-vlsp2020"
 # Kích thước ẩn của encoder BASE là 768
@@ -23,22 +24,26 @@ def create_baseline_model(tokenizer_path):
         is_decoder=True,                        # BẮT BUỘC: Xác nhận đây là Decoder
         add_cross_attention=True,               # BẮT BUỘC: Cho phép Cross-Attention với Encoder
         # Thiết lập các ID token đặc biệt cho quá trình sinh (generate)
-        decoder_start_token_id=tokenizer.cls_token_id, 
+        # decoder_start_token_id=tokenizer.cls_token_id, 
+        # pad_token_id=tokenizer.pad_token_id
+        decoder_start_token_id=tokenizer.bos_token_id, 
         pad_token_id=tokenizer.pad_token_id
     )
+    # 2.a. Tải checkpoint của Encoder từ bộ nhớ đệm cục bộ
+    ENCODER_CHECKPOINT_NAME = "pytorch_model.bin" 
+    encoder_path = AutoConfig.cached_file(encoder_id, ENCODER_CHECKPOINT_NAME)
 
     # 3. Khởi tạo mô hình Encoder-Decoder
     
     # A. Tải Encoder (Wav2Vec2)
-    encoder = AutoModel.from_pretrained(
-        encoder_id,
-        config=encoder_config, # Dùng config đã tải để đảm bảo khớp
-        local_files_only=True # <-- BẮT BUỘC DÙNG FILE CACHE
-    )
-    
-    # B. Khởi tạo Decoder (Bert) từ cấu hình (không cần tải checkpoint)
+    encoder = Wav2Vec2Model(encoder_config)
+    print("Đang tải trọng số Encoder thủ công...")
+    encoder_state_dict = torch.load(encoder_path, map_location="cpu")
+    encoder.load_state_dict(encoder_state_dict, strict=True)
+
+    # B. Khởi tạo Decoder (Bert) từ cấu hình (không cần tải checkpoint)    
     decoder = AutoModel.from_config(decoder_config)
-    
+
     # C. Kết hợp Encoder và Decoder
     model = SpeechEncoderDecoderModel(
         encoder=encoder,
